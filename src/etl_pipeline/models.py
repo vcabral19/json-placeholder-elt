@@ -1,34 +1,42 @@
-from pydantic import BaseModel
-from typing import Any
+from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship
 
-class Geo(BaseModel):
+class Geo(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
     lat: str
     lng: str
+    address_id: Optional[int] = Field(default=None, foreign_key="address.id")
 
-class Address(BaseModel):
+class Address(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
     street: str
     suite: str
     city: str
     zipcode: str
-    geo: Geo
+    # One-to-one relationship with Geo. Note: uselist=False ensures a one-to-one relation.
+    geo: Optional[Geo] = Relationship(back_populates="address", sa_relationship_kwargs={"uselist": False})
 
-class Company(BaseModel):
+Geo.address = Relationship(back_populates="geo")
+
+class Company(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     catchPhrase: str
     bs: str
 
-class User(BaseModel):
-    id: int
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     username: str
     email: str
-    address: Address
     phone: str
     website: str
-    company: Company
+    # Foreign keys for the nested models
+    address_id: Optional[int] = Field(default=None, foreign_key="address.id")
+    company_id: Optional[int] = Field(default=None, foreign_key="company.id")
+    # Optional field to store the entire raw record
+    raw: Optional[dict] = Field(default=None)
 
-    # Allow extra fields so that non-compliant data isn't dropped
-    # This is useful for not losing data when the API response changes
-    # This non model compliant data can later be reprocessed
-    class Config:
-        extra = "allow"
+    # Relationships to nested models
+    address: Optional[Address] = Relationship()
+    company: Optional[Company] = Relationship()
