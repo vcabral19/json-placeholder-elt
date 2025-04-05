@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code workspace settings
+.vscode/
+
+# Virtual environments
+.env/
+.venv/
+venv/
+ENV/
+env/
+venv.bak/
+
+# Our local "datalake"
+data/
