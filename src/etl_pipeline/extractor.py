@@ -3,21 +3,20 @@ import time
 import json
 import os
 import logging
-import urllib3
 from datetime import datetime
+import urllib3
 
 from etl_pipeline.models import User
 
 # Configure logging format to guarantee parsability in observability tools
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-# Hardcoding configs for simplicity for now...
-API_URL = "https://jsonplaceholder.typicode.com/users"
-RAW_DATA_DIR = "data/raw"
-
-# Disable warnings about unverified HTTPS requests
+# Disable warnings about unverified HTTPS requests (development only)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-def fetch_data() -> dict:
+
+API_URL = "https://jsonplaceholder.typicode.com/users"
+
+def fetch_data():
     try:
         response = requests.get(API_URL, verify=False)
         response.raise_for_status()
@@ -27,21 +26,21 @@ def fetch_data() -> dict:
         logging.error(f"Error fetching data: {e}")
         return None
 
-def validate_data(data: dict) -> list[dict]:
+def validate_data(data):
     valid_users = []
     for record in data:
         try:
-            user = User.parse_obj(record)
+            # Use the custom from_api method for transformation/validation.
+            user = User.from_api(record)
             valid_users.append(user)
         except Exception as e:
             logging.warning(f"Validation error for record {record.get('id', 'unknown')}: {e}")
     return valid_users
 
-def save_raw_data(data: dict) -> str:
+def save_raw_data(data):
     timestamp = int(time.time())
-    # Partition the raw data by date and hour (e.g., data/raw/2025-04-05/14)
     date_path = datetime.now().strftime("%Y-%m-%d/%H")
-    dir_path = os.path.join(RAW_DATA_DIR, date_path)
+    dir_path = os.path.join("data", "raw", date_path)
     os.makedirs(dir_path, exist_ok=True)
     file_path = os.path.join(dir_path, f"raw_data_{timestamp}.json")
     try:
@@ -54,7 +53,6 @@ def save_raw_data(data: dict) -> str:
         return None
 
 if __name__ == "__main__":
-    # You can still run the extractor stand-alone if needed.
     data = fetch_data()
     if data:
         save_raw_data(data)

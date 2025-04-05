@@ -30,7 +30,6 @@ valid_user = {
 
 @pytest.fixture
 def session():
-    # Create an in-memory SQLite database for testing.
     engine = create_engine("sqlite://", echo=False)
     from sqlmodel import SQLModel
     SQLModel.metadata.create_all(engine)
@@ -38,11 +37,9 @@ def session():
         yield session
 
 def test_process_and_insert(session):
-    # Process and insert the valid record into the test DB.
     process_and_insert(session, valid_user)
     session.commit()
     
-    # Query the database for the inserted user.
     statement = select(User).where(User.id == valid_user["id"])
     result = session.exec(statement)
     user = result.first()
@@ -50,14 +47,12 @@ def test_process_and_insert(session):
     assert user is not None, "User should be inserted into the DB."
     assert user.name == valid_user["name"], "User name should match."
     
-    # Verify that the nested address is correctly inserted.
+    # Verify nested objects.
     assert user.address is not None, "Address should be inserted."
     assert user.address.street == valid_user["address"]["street"], "Street should match."
     
-    # Verify that the nested geo is correctly inserted.
     assert user.address.geo is not None, "Geo should be inserted."
     assert user.address.geo.lat == valid_user["address"]["geo"]["lat"], "Geo latitude should match."
     
-    # Verify that the nested company is correctly inserted.
     assert user.company is not None, "Company should be inserted."
     assert user.company.name == valid_user["company"]["name"], "Company name should match."
