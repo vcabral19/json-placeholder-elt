@@ -15,3 +15,7 @@ venv.bak/
 
 # Our local "datalake"
 data/
+
+# logs
+logs/
+*.log
