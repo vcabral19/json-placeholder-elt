@@ -30,8 +30,8 @@ A basic ETL pipeline built with Python that:
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/your-username/etl-pipeline.git
-   cd etl-pipeline
+   git clone https://github.com/vcabral19/json-placeholder-elt.git
+   cd json-placeholder-elt
    ```
 2. **Install dependencies using Poetry:**
 
