@@ -10,3 +10,14 @@ services:
       POSTGRES_DB: etl_db
     ports:
       - "5432:5432"
+  etl_app:
+    build: .
+    container_name: etl_app
+    environment:
+      # This environment variable is used by the app to connect to the database.
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/etl_db
+    depends_on:
+      - postgres
+    ports:
+      # Expose metrics server port if needed.
+      - "8000:8000"
