@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "etl-pipeline"
-version = "0.1.0"
+version = "0.2.0"
 description = "A basic ETL pipeline"
 authors = ["Vitor Cabral <vitorcabral19@gmail.com>"]
 
@@ -12,6 +12,9 @@ packages = [
 python = "^3.12"
 requests = "^2.28.0"
 pydantic = "^1.10.2"
+sqlmodel = "^0.0.23"
+psycopg2-binary = "^2.9.6"
+pyyaml = "^6.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.0"

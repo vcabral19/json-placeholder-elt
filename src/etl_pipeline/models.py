@@ -1,34 +1,96 @@
-from pydantic import BaseModel
-from typing import Any
+from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, PrimaryKeyConstraint
+from sqlalchemy.types import JSON
 
-class Geo(BaseModel):
+
+class Geo(SQLModel, table=True):
+    __table_args__ = {"extend_existing": True}
+    id: Optional[int] = Field(default=None, primary_key=True)
     lat: str
     lng: str
+    address_id: Optional[int] = Field(default=None, foreign_key="address.id")
+    # Reverse relationship (one-to-one) with Address.
+    address: Optional["Address"] = Relationship(back_populates="geo")
+    
+    class Config:
+        extra = "allow"
 
-class Address(BaseModel):
+class Address(SQLModel, table=True):
+    __table_args__ = {"extend_existing": True}
+    id: Optional[int] = Field(default=None, primary_key=True)
     street: str
     suite: str
     city: str
     zipcode: str
-    geo: Geo
+    # One-to-one relationship with Geo. Cascade is set on the "one" side.
+    geo: Optional[Geo] = Relationship(
+        back_populates="address",
+        sa_relationship_kwargs={"uselist": False, "cascade": "all, delete-orphan", "single_parent": True}
+    )
+    
+    class Config:
+        extra = "allow"
 
-class Company(BaseModel):
+class Company(SQLModel, table=True):
+    __table_args__ = {"extend_existing": True}
+    id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     catchPhrase: str
     bs: str
+    
+    class Config:
+        extra = "allow"
 
-class User(BaseModel):
-    id: int
+class User(SQLModel, table=True):
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "extraction_ts", name="user_pk"),
+        {"extend_existing": True},
+    )
+    # Original API id
+    user_id: int = Field()
+    # Extraction timestamp (an integer, e.g. Unix epoch seconds)
+    extraction_ts: int = Field()
+    
     name: str
     username: str
     email: str
-    address: Address
     phone: str
     website: str
-    company: Company
-
-    # Allow extra fields so that non-compliant data isn't dropped
-    # This is useful for not losing data when the API response changes
-    # This non model compliant data can later be reprocessed
+    address_id: Optional[int] = Field(default=None, foreign_key="address.id")
+    company_id: Optional[int] = Field(default=None, foreign_key="company.id")
+    raw: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    
+    address: Optional["Address"] = Relationship(
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "single_parent": True}
+    )
+    company: Optional["Company"] = Relationship(
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "single_parent": True}
+    )
+    
     class Config:
         extra = "allow"
+    
+    @classmethod
+    def from_api(cls, record: dict, extraction_ts: int) -> "User":
+        # Process nested address and company as before.
+        address_data = record.get("address", {}).copy()
+        geo_data = address_data.pop("geo", None)
+        geo = Geo(**geo_data) if geo_data else None
+        address = Address(**address_data, geo=geo) if address_data else None
+
+        company_data = record.get("company", {})
+        company = Company(**company_data) if company_data else None
+
+        return cls(
+            user_id=record["id"],
+            extraction_ts=extraction_ts,
+            name=record["name"],
+            username=record["username"],
+            email=record["email"],
+            phone=record["phone"],
+            website=record["website"],
+            address=address,
+            company=company,
+            raw=record
+        )
