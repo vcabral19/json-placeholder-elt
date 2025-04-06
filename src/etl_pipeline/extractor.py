@@ -26,23 +26,24 @@ def fetch_data():
         logging.error(f"Error fetching data: {e}")
         return None
 
-def validate_data(data):
+def validate_data(data, extraction_ts: int = 0):
     valid_users = []
     for record in data:
         try:
-            # Use the custom from_api method for transformation/validation.
-            user = User.from_api(record)
+            # Pass the extraction timestamp to the from_api method.
+            user = User.from_api(record, extraction_ts)
             valid_users.append(user)
         except Exception as e:
             logging.warning(f"Validation error for record {record.get('id', 'unknown')}: {e}")
     return valid_users
 
-def save_raw_data(data):
-    timestamp = int(time.time())
-    date_path = datetime.now().strftime("%Y-%m-%d/%H")
+def save_raw_data(data, extraction_ts: int):
+    from datetime import datetime
+    # Use the provided extraction_ts to build the file path
+    date_path = datetime.fromtimestamp(extraction_ts).strftime("%Y-%m-%d/%H")
     dir_path = os.path.join("data", "raw", date_path)
     os.makedirs(dir_path, exist_ok=True)
-    file_path = os.path.join(dir_path, f"raw_data_{timestamp}.json")
+    file_path = os.path.join(dir_path, f"raw_data_{extraction_ts}.json")
     try:
         with open(file_path, "w") as f:
             json.dump(data, f, indent=2)
@@ -51,6 +52,7 @@ def save_raw_data(data):
     except Exception as e:
         logging.error(f"Failed to save raw data: {e}")
         return None
+
 
 if __name__ == "__main__":
     data = fetch_data()

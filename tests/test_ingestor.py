@@ -37,10 +37,12 @@ def session():
         yield session
 
 def test_process_and_insert(session):
-    process_and_insert(session, valid_user)
+    # Provide a dummy extraction timestamp (e.g., 1234567890)
+    extraction_ts = 1234567890
+    process_and_insert(session, valid_user, extraction_ts)
     session.commit()
     
-    statement = select(User).where(User.id == valid_user["id"])
+    statement = select(User).where(User.user_id == valid_user["id"])
     result = session.exec(statement)
     user = result.first()
     

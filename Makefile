@@ -7,7 +7,7 @@ run-ingestor:
 	poetry run python -m etl_pipeline.ingestor
 
 .PHONY: run-extractor
-run:
+run-extractor:
 	poetry run python -m etl_pipeline.extractor
 
 .PHONY: test

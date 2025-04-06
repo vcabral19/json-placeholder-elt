@@ -1,28 +1,29 @@
-# Dockerfile
 FROM python:3.12-slim
 
-# Set environment variables for Poetry
-ENV POETRY_VERSION=1.5.1
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Poetry and build tools
-RUN apt-get update && apt-get install -y curl build-essential libpq-dev && \
-    curl -sSL https://install.python-poetry.org | python3 - && \
-    apt-get clean
-
-# Add Poetry to PATH
-ENV PATH="/root/.local/bin:$PATH"
+# Install Poetry via pip
+RUN pip install poetry
 
 WORKDIR /app
 
-# Copy the source code and other necessary files
+# Copy source code and other files
 COPY src/ ./src/
 COPY data/ ./data/
 COPY config.yaml ./
-# Copy project files
-COPY pyproject.toml poetry.lock ./
 
-# Install only production dependencies
-RUN poetry install --no-dev
+# Copy dependency files
+COPY pyproject.toml poetry.lock* ./
 
-# Run the extractor by default (can be adjusted as needed)
+# Set PYTHONPATH so that the source directory is included.
+ENV PYTHONPATH="/app/src:$PYTHONPATH"
+
+# Install production dependencies
+RUN poetry install --without dev --no-root
+
+# Default command to run your ingestor
 CMD ["poetry", "run", "python", "-m", "etl_pipeline.ingestor"]
