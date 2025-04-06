@@ -2,13 +2,9 @@
 install:
 	poetry install
 
-.PHONY: run-ingestor
-run-ingestor:
-	poetry run python -m etl_pipeline.ingestor
-
-.PHONY: run-extractor
-run-extractor:
-	poetry run python -m etl_pipeline.extractor
+.PHONY: run
+run:
+	poetry run python -m etl_pipeline.main
 
 .PHONY: test
 test:

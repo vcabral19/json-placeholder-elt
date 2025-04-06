@@ -25,5 +25,4 @@ ENV PYTHONPATH="/app/src:$PYTHONPATH"
 # Install production dependencies
 RUN poetry install --without dev --no-root
 
-# Default command to run your ingestor
-CMD ["poetry", "run", "python", "-m", "etl_pipeline.ingestor"]
+CMD ["poetry", "run", "python", "-m", "etl_pipeline.main"]
