@@ -25,4 +25,6 @@ ENV PYTHONPATH="/app/src:$PYTHONPATH"
 # Install production dependencies
 RUN poetry install --without dev --no-root
 
-CMD ["poetry", "run", "python", "-m", "etl_pipeline.main"]
+# default option
+CMD ["poetry", "run", "python", "-m", "etl_pipeline.main", "--mode", "ingestor"]
+

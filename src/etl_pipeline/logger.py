@@ -29,7 +29,7 @@ def get_logger(name: str = __name__) -> logging.Logger:
             datefmt="%Y-%m-%d %H:%M:%S"
         )
         formatter.converter = time.gmtime
-
+        
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
         

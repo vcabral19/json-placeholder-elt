@@ -9,6 +9,8 @@ SERVICE_ERRORS = Counter("service_errors", "Number of service-level errors")
 APP_STARTS = Counter("app_starts", "Number of times the application has started")
 DB_CONNECTIONS = Counter("db_connections", "Number of times a connection to the database was established")
 DATALAKE_WRITES = Counter("datalake_writes", "Number of datalake file writes")
+TRANSFORM_SUCCESS = Counter("transform_success", "Number of successfully transformed raw files")
+TRANSFORM_FAILURE = Counter("transform_failure", "Number of raw files that failed to transform")
 
 
 def start_metrics_server(port: int = 8000):
