@@ -5,6 +5,7 @@ install:
 .PHONY: test
 test:
 	poetry run pytest
+
 .PHONY: run docker-up docker-app docker-all
 
 # Run the application locally (without Docker)
@@ -12,7 +13,7 @@ run:
 	poetry run python -m etl_pipeline.main
 
 # Start only the PostgreSQL container via Docker Compose
-docker-up:
+docker-postgres:
 	docker-compose up -d postgres
 
 # Build and run the app container standalone (uses --network=host)

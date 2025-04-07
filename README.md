@@ -29,10 +29,10 @@ A basic ETL pipeline built with Python that:
 
 1. **Clone the repository:**
 
-   ```bash
-   git clone https://github.com/vcabral19/json-placeholder-elt.git
-   cd json-placeholder-elt
-   ```
+```bash
+git clone https://github.com/vcabral19/json-placeholder-elt.git
+cd json-placeholder-elt
+```
 2. **Install dependencies using Poetry:**
 
 Make sure Poetry is installed. Then run:
@@ -54,11 +54,6 @@ Use the provided Makefile target:
 ```bash
 make run
 ```
-Or directly via Poetry:
-
-```bash
-poetry run python -m etl_pipeline.main
-```
 3. Logs and Metrics:
 
 - Logs are written to logs/etl.log and printed to the console.
@@ -68,33 +63,27 @@ poetry run python -m etl_pipeline.main
 ### Using Docker Compose
 1. Start the PostgreSQL container:
 
-The provided docker-compose.yml will start a PostgreSQL instance:
-
 ```bash
-docker-compose up -d
+make docker-postgres
 ```
+
 2. Build and run the application container:
 
-Build your Docker image:
-
 ```bash
-docker build -t etl-pipeline .
-```
-Run the container (ensure that networking is configured appropriately):
-
-```bash
-docker run --rm --network=host etl-pipeline
+make docker-app
 ```
 
-> **Note:**  
-> When running inside Docker, the application expects the database hostname to be `postgres` (configured via Docker Compose networking).  
-> Adjust the `DATABASE_URL` accordingly if you’re running on the host.
+3. Alternatively you can run the whole application with a single compose:
+
+```bash
+make docker-all
+```
 
 ## Testing
 Run the test suite with pytest:
 
 ```bash
-poetry run pytest
+make test
 ```
 
 This will run all unit and integration tests.
