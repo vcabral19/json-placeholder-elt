@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 def get_logger(name: str = __name__) -> logging.Logger:
     """
@@ -27,6 +28,8 @@ def get_logger(name: str = __name__) -> logging.Logger:
             fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
+        formatter.converter = time.gmtime
+
         file_handler.setFormatter(formatter)
         console_handler.setFormatter(formatter)
         

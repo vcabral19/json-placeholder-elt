@@ -9,7 +9,7 @@ from etl_pipeline.metrics import start_metrics_server
 logger = get_logger(__name__)
 
 
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/etl_db"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/etl_db")
 engine = create_engine(DATABASE_URL, echo=True)
 
 # Start the metrics HTTP server on port 8000
