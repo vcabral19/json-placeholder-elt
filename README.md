@@ -73,7 +73,13 @@ make docker-postgres
 make docker-app
 ```
 
-3. Alternatively you can run the whole application with a single compose:
+3. Build and run transform:
+
+```bash
+make docker-transform
+```
+
+4. Alternatively you can run the whole application with a single compose:
 
 ```bash
 make docker-all
@@ -125,10 +131,51 @@ etl-pipeline/
          ├── logger.py         # Logger configuration module
          └── metrics.py        # Prometheus metrics definition & server starter
 ```
+### Design choices
+I've tried to leave the tier1 (raw) data layer as safe as free of logic as possible so in the scenario of incidents we minimize data loss. Data can always be reprocessed from raw as soon as we have it in a accesible organized persistent data layer (such as a blob storage).
+
+That's part of the reason why I separated tier2 (processed) data application from it. The other part is because we can other transformations consuming from this same extractions. Decoupling makes sense for maintaiance of the logic and of the applications operations.
+
+The logic shared between those 2 applications can be changed in a more organized way like this as well. This way I tried to make use of pydantic to maintain the models of the raw data, the tables in postgres and the processed .csvs.
+
+Finally for the transformations I brough the users and the companies to the datalake separately to minimize "PII" exposure. People can play with the company data for marketing campaign but for the actual "user" table we can restrict access to the .csv/data to the systems/people that really needs to see it.
+
+### Dataflow
+```pgsql
+[API: jsonplaceholder]
+         │
+         ▼
+[Extractor/Ingestor Module]
+  • Fetches & validates API data (using SQLModel/Pydantic)
+  • Writes raw JSON files to data/raw (partitioned by UTC date/hour)
+  • Inserts data into PostgreSQL
+         │
+         ▼
+   [Raw Data Storage]
+         │
+         ▼
+[Transformer Module (continuous)]
+  • Polls data/raw for new files
+  • Reads raw JSON and calls User.from_api() then User.transform()
+  • Aggregates output into ProcessedCompany and ProcessedUser objects
+  • Writes processed CSV files to data/processed (partitioned by UTC date/hour)
+```
+## Cloud migration
+
+- Blob storage such as s3 or GCS instead of the local file system for raw and processed data storage
+- Processed layer could use more sophisticated tecnologies such as iceberg or deltalake for getting out of the box ACID capabilities to the datalake
+- We can orchestrate the containers in kubernetes, or any other container deployment service in cloud like Amazon ECS
+- s3 could for example write new write events to a SQS so transfomer can consume files to guarantee processed exactly once from there
+- Data can be consumed from the tier2 blob layer from spark cluster, bigquery, dashboards etc
+
 ## Final Notes
 
-For production, consider using a migration tool (like Alembic) and externalizing configuration (e.g., via environment variables).
+For production we need something to externalize configurations (I added the config.yaml here but never used) (e.g., via environment variables).
 
 Monitor the /metrics endpoint with Prometheus and build dashboards (e.g., in Grafana) to alert on API, database, and service-level issues.
 
 There is a bunch of non-configurable hardcoded variables around the code, of course refactor this to make seamless the experience of working in dev and moving things in a configurable way to production.
+
+Transform can be refactored to use a queue system to get events of new written files from it instead of pooling and listing all files on both sides every 30 seconds (which is obviously not scalable).
+
+We can investigate good strategies to deal with postgres in the future based on usage pattern, most likely partition the tables by the timestamp and index it by the id of the entities.

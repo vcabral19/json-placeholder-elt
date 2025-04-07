@@ -25,6 +25,18 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+    command: ["poetry", "run", "python", "-m", "etl_pipeline.main", "--mode", "ingestor"]
+
+
+  etl_transformer:
+    build: .
+    container_name: etl_transformer
+    depends_on:
+      - etl_app
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    command: ["poetry", "run", "python", "-m", "etl_pipeline.main", "--mode", "transformer"]
 
 volumes:
   postgres_data:
