@@ -7,15 +7,28 @@ from datetime import datetime, timezone
 
 from etl_pipeline.logger import get_logger
 from etl_pipeline.metrics import TRANSFORM_SUCCESS, TRANSFORM_FAILURE
+from etl_pipeline.models import User, ProcessedCompany, ProcessedUser
 
 logger = get_logger(__name__)
 
+# Base directories and polling interval.
 RAW_DIR = "data/raw"
 PROCESSED_DIR = "data/processed"
-POLL_INTERVAL = 30  # seconds between scans
+POLL_INTERVAL = 30  # seconds
+
+# Define a mapping from keys (returned by User.transform()) to output model classes.
+# Also, each processed model has an attribute "path_name" which we use for output folder.
+OUTPUT_MODEL_MAPPING = {
+    "processed_company": ProcessedCompany,
+    "processed_user": ProcessedUser
+}
+
+for key, model_cls in OUTPUT_MODEL_MAPPING.items():
+    if not hasattr(model_cls, "path_name"):
+        setattr(model_cls, "path_name", model_cls.__name__.lower())
 
 def extract_timestamp(file_path):
-    """Extracts the epoch timestamp from a raw file name."""
+    """Extracts the epoch timestamp from a raw file name of the form 'raw_data_{ts}.json'."""
     base = os.path.basename(file_path)
     try:
         ts_str = base[len("raw_data_"):-len(".json")]
@@ -26,8 +39,11 @@ def extract_timestamp(file_path):
 
 def get_unprocessed_raw_files(raw_dir=RAW_DIR, processed_dir=PROCESSED_DIR):
     """
-    Scans recursively under raw_dir for raw_data_*.json files and returns a list of
-    (file_path, timestamp) tuples for those files that don't have corresponding processed CSVs.
+    Scans raw_dir recursively for raw_data_*.json files.
+    For each file, it checks that for every output model in OUTPUT_MODEL_MAPPING,
+    a corresponding CSV file exists in:
+        processed_dir / <model.path_name> / <partition>/processed_<model.path_name>_<ts>.csv
+    Returns a list of (file_path, ts) for files that are not yet fully processed.
     """
     pattern = os.path.join(raw_dir, "**", "raw_data_*.json")
     files = glob.glob(pattern, recursive=True)
@@ -36,113 +52,127 @@ def get_unprocessed_raw_files(raw_dir=RAW_DIR, processed_dir=PROCESSED_DIR):
         ts = extract_timestamp(file)
         if ts is None:
             continue
-        # Determine partition (same as transformation logic)
-        partition = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d/%H")
-        # Expected output files in processed folder for both company and user CSVs:
-        company_file = os.path.join(processed_dir, "company", partition, f"processed_company_{ts}.csv")
-        user_file = os.path.join(processed_dir, "user", partition, f"processed_user_{ts}.csv")
-        # If either file is missing, consider the raw file unprocessed.
-        if not (os.path.exists(company_file) and os.path.exists(user_file)):
+        # Partition based on UTC: YYYY-MM-DD/HH
+        partition = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d/%H")
+        all_exist = True
+        for model_cls in OUTPUT_MODEL_MAPPING.values():
+            output_file = os.path.join(
+                processed_dir,
+                model_cls.path_name,
+                partition,
+                f"processed_{model_cls.path_name}_{ts}.csv"
+            )
+            if not os.path.exists(output_file):
+                all_exist = False
+                break
+        if not all_exist:
             unprocessed.append((file, ts))
     return unprocessed
 
-def transform_raw_file(raw_file, extraction_ts):
+def generic_write_csv(model_cls, instances, extraction_ts, processed_dir=PROCESSED_DIR):
     """
-    Transforms a single raw file into CSV files.
-    Writes:
-      - Company data to data/processed/company/YYYY-MM-DD/HH/processed_company_{timestamp}.csv
-      - User data to data/processed/user/YYYY-MM-DD/HH/processed_user_{timestamp}.csv
-    Timestamps are converted to ISO 8601 UTC.
+    Writes a list of model instances (processed) to a CSV file.
+    The output folder is determined by:
+      processed_dir / model_cls.path_name / <partition>
+    where partition is derived from extraction_ts (formatted as YYYY-MM-DD/HH in UTC).
+    The file is named:
+      processed_<model_cls.path_name>_<extraction_ts>.csv
+    The CSV headers are determined from the model's __fields__.
     """
-    # Determine partition folder from extraction_ts using timezone-aware conversion
     partition = datetime.fromtimestamp(extraction_ts, tz=timezone.utc).strftime("%Y-%m-%d/%H")
-    company_dir = os.path.join(PROCESSED_DIR, "company", partition)
-    user_dir = os.path.join(PROCESSED_DIR, "user", partition)
-    os.makedirs(company_dir, exist_ok=True)
-    os.makedirs(user_dir, exist_ok=True)
-    
-    # Load raw data from JSON (unchanged)
+    folder = os.path.join(processed_dir, model_cls.path_name, partition)
+    os.makedirs(folder, exist_ok=True)
+    file_path = os.path.join(folder, f"processed_{model_cls.path_name}_{extraction_ts}.csv")
+    fieldnames = list(model_cls.__fields__.keys())
+    file_exists = os.path.exists(file_path)
+    try:
+        with open(file_path, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            for instance in instances:
+                writer.writerow(instance.dict())
+        logger.info("Wrote %d records to %s", len(instances), file_path)
+    except Exception as e:
+        logger.error("Error writing CSV for %s: %s", model_cls.__name__, e)
+        TRANSFORM_FAILURE.inc()
+
+def generic_transform(raw_file, extraction_ts, transformation_fn):
+    """
+    Generic transformation process:
+      - Reads a raw JSON file.
+      - For each record, applies transformation_fn(record, extraction_iso)
+        to obtain a dict mapping output keys (e.g. "processed_company", "processed_user")
+        to processed model instances.
+      - Aggregates processed instances by key.
+      - For each key in the aggregated dict, writes the output to CSV using generic_write_csv.
+    """
     try:
         with open(raw_file, "r") as f:
             data = json.load(f)
     except Exception as e:
-        logger.error("Error loading JSON from %s: %s", raw_file, e)
+        logger.error("Error reading raw file %s: %s", raw_file, e)
         TRANSFORM_FAILURE.inc()
         return
 
-    companies = {}  # key: company name, value: dict with company data
-    users = []      # list of user records
-    company_id_counter = 1
-
-    # Convert extraction_ts to ISO 8601 UTC format
+    # Create a consistent extraction timestamp string in ISO 8601 UTC.
     extraction_iso = datetime.fromtimestamp(extraction_ts, tz=timezone.utc).isoformat()
 
+    aggregated = {}  # key -> list of processed model instances.
     for record in data:
-        comp = record.get("company", {})
-        comp_name = comp.get("name", "")
-        if comp_name and comp_name not in companies:
-            companies[comp_name] = {
-                "company_id": company_id_counter,
-                "name": comp.get("name", ""),
-                "catchPhrase": comp.get("catchPhrase", ""),
-                "bs": comp.get("bs", ""),
-                "extraction_ts": extraction_iso
-            }
-            company_id_counter += 1
-
-        user_record = {
-            "user_id": record.get("id"),
-            "username": record.get("username", ""),
-            "phone": record.get("phone", ""),
-            "email": record.get("email", ""),
-            "website": record.get("website", ""),
-            "company_id": companies.get(comp_name, {}).get("company_id"),
-            "extraction_ts": extraction_iso
-        }
-        users.append(user_record)
-
-    company_csv = os.path.join(company_dir, f"processed_company_{extraction_ts}.csv")
-    user_csv = os.path.join(user_dir, f"processed_user_{extraction_ts}.csv")
-
-    def write_csv(file_path, fieldnames, rows):
-        file_exists = os.path.exists(file_path)
         try:
-            with open(file_path, "a", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                if not file_exists:
-                    writer.writeheader()
-                for row in rows:
-                    writer.writerow(row)
+            result = transformation_fn(record, extraction_iso)
+            # transformation_fn returns a dict mapping keys to processed instances.
+            for key, instance in result.items():
+                aggregated.setdefault(key, []).append(instance)
         except Exception as e:
-            logger.error("Error writing CSV to %s: %s", file_path, e)
+            logger.error("Error transforming record %s: %s", record.get("id"), e)
             TRANSFORM_FAILURE.inc()
+            continue
 
-    company_fieldnames = ["company_id", "name", "catchPhrase", "bs", "extraction_ts"]
-    user_fieldnames = ["user_id", "username", "phone", "email", "website", "company_id", "extraction_ts"]
+    for key, instances in aggregated.items():
+        if key not in OUTPUT_MODEL_MAPPING:
+            logger.error("No output mapping for key: %s", key)
+            continue
+        model_cls = OUTPUT_MODEL_MAPPING[key]
+        generic_write_csv(model_cls, instances, extraction_ts, processed_dir=PROCESSED_DIR)
 
-    write_csv(company_csv, company_fieldnames, list(companies.values()))
-    write_csv(user_csv, user_fieldnames, users)
-
-    logger.info("Transformed raw file %s into processed files: %s (company) and %s (user)",
-                raw_file, company_csv, user_csv)
+    logger.info("Transformed raw file %s with timestamp %d", raw_file, extraction_ts)
     TRANSFORM_SUCCESS.inc()
 
-def run_transformer():
+def run_transformer(transformation_fn, raw_dir=RAW_DIR, processed_dir=PROCESSED_DIR, poll_interval=POLL_INTERVAL):
     """
-    Continuously polls the raw data directory for unprocessed raw files,
-    transforms them into CSV files in the processed directory, and logs progress.
+    Continuous polling: every poll_interval seconds, it scans raw_dir for new raw files
+    that have not been processed (based on the output files for all output models),
+    and applies generic_transform to each.
+    The transformation_fn is a function with signature:
+         f(record: dict, extraction_iso: str) -> dict
+    which returns a mapping from output keys to processed model instances.
     """
-    logger.info("Starting continuous transformation process.")
+    logger.info("Starting continuous transformer process.")
     while True:
-        unprocessed_files = get_unprocessed_raw_files()
-        if unprocessed_files:
-            logger.info("Found %d unprocessed raw file(s).", len(unprocessed_files))
-            for raw_file, ts in unprocessed_files:
+        unprocessed = get_unprocessed_raw_files(raw_dir, processed_dir)
+        if unprocessed:
+            logger.info("Found %d unprocessed raw file(s).", len(unprocessed))
+            for raw_file, ts in unprocessed:
                 logger.info("Processing raw file: %s", raw_file)
-                transform_raw_file(raw_file, ts)
+                generic_transform(raw_file, ts, transformation_fn)
         else:
             logger.info("No new raw files to process.")
-        time.sleep(POLL_INTERVAL)
+        time.sleep(poll_interval)
+
+# A default transformation function that leverages the User model.
+def default_transformation_fn(record, extraction_iso):
+    """
+    Uses the centralized User model to parse the raw record (via User.from_api)
+    and then calls its transform() method.
+    The transform() method should return a dict mapping keys to processed instances.
+    """
+    # We need the epoch timestamp; we can parse extraction_iso back to a timestamp.
+    ts = int(datetime.fromisoformat(extraction_iso).timestamp())
+    user_obj = User.from_api(record, ts)
+    return user_obj.transform(extraction_iso)
 
 if __name__ == "__main__":
-    run_transformer()
+    # Run transformer with the default transformation function.
+    run_transformer(default_transformation_fn)

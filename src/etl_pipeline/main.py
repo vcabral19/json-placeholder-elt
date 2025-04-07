@@ -5,7 +5,7 @@ import signal
 from etl_pipeline.logger import get_logger
 from etl_pipeline.metrics import SERVICE_ERRORS, APP_STARTS
 from etl_pipeline.ingestor import run_ingestor
-from etl_pipeline.transform import run_transformer
+from etl_pipeline.transform import default_transformation_fn, run_transformer
 
 logger = get_logger(__name__)
 service_error_flag = False
@@ -28,7 +28,7 @@ def main():
         if args.mode == "ingestor":
             run_ingestor()
         elif args.mode == "transformer":
-            run_transformer()
+            run_transformer(default_transformation_fn)
     except Exception as e:
         service_error_flag = True
         logger.error("Unhandled exception in %s mode: %s", args.mode, e)

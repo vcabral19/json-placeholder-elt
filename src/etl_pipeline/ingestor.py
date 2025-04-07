@@ -1,3 +1,4 @@
+import os
 import time
 from sqlmodel import Session, create_engine
 from etl_pipeline.models import User

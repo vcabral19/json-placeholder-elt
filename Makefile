@@ -33,4 +33,5 @@ docker-transform:
 docker-all:
 	mkdir -p data
 	mkdir -p logs
+	chmod -R 777 data logs
 	docker-compose up --build
