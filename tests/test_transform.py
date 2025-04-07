@@ -58,7 +58,6 @@ def test_extract_timestamp(tmp_path):
 def test_generic_transform_and_write(setup_dirs):
     raw_dir, processed_dir = setup_dirs
     extraction_ts = 1234567890
-    # Partition based on UTC (format: YYYY-MM-DD/HH)
     partition = datetime.fromtimestamp(extraction_ts, tz=timezone.utc).strftime("%Y-%m-%d/%H")
     
     # Write sample raw data into a file.

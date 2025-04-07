@@ -77,7 +77,6 @@ class User(SQLModel, table=True):
 
     @classmethod
     def from_api(cls, record: dict, extraction_ts: int) -> "User":
-        # Process nested address and company as before.
         address_data = record.get("address", {}).copy()
         geo_data = address_data.pop("geo", None)
         geo = Geo(**geo_data) if geo_data else None

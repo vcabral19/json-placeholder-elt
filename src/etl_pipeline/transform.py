@@ -118,7 +118,9 @@ def generic_transform(raw_file, extraction_ts, transformation_fn):
     # Create a consistent extraction timestamp string in ISO 8601 UTC.
     extraction_iso = datetime.fromtimestamp(extraction_ts, tz=timezone.utc).isoformat()
 
-    aggregated = {}  # key -> list of processed model instances.
+    # key -> list of processed model instances.
+    # "processed_company" -> ProcessedCompany instance
+    aggregated = {}
     for record in data:
         try:
             result = transformation_fn(record, extraction_iso)
@@ -161,7 +163,6 @@ def run_transformer(transformation_fn, raw_dir=RAW_DIR, processed_dir=PROCESSED_
             logger.info("No new raw files to process.")
         time.sleep(poll_interval)
 
-# A default transformation function that leverages the User model.
 def default_transformation_fn(record, extraction_iso):
     """
     Uses the centralized User model to parse the raw record (via User.from_api)
@@ -174,5 +175,4 @@ def default_transformation_fn(record, extraction_iso):
     return user_obj.transform(extraction_iso)
 
 if __name__ == "__main__":
-    # Run transformer with the default transformation function.
     run_transformer(default_transformation_fn)
