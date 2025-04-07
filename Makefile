@@ -18,13 +18,19 @@ docker-postgres:
 
 # Build and run the app container standalone (uses --network=host)
 docker-app:
+	mkdir -p data
+	mkdir -p logs
 	docker build -t etl-pipeline .
 	docker run --rm --network=host etl-pipeline
 
 # Run the transformer container via Docker Compose
 docker-transform:
+	mkdir -p data
+	mkdir -p logs
 	docker-compose up etl_transformer
 
 # Start the entire application (PostgreSQL and the ETL app) via Docker Compose
 docker-all:
+	mkdir -p data
+	mkdir -p logs
 	docker-compose up --build
