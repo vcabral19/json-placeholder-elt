@@ -14,7 +14,6 @@ WORKDIR /app
 # Copy source code and other files
 COPY src/ ./src/
 COPY data/ ./data/
-COPY config.yaml ./
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock* ./

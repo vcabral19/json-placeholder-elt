@@ -42,10 +42,9 @@ def on_service_exit():
         logger.info("Service ended execution normally.")
 
 def handle_signal(signum, frame):
-    global service_error_flag
-    logger.error("Received termination signal (%s). Shutting down.", signum)
-    service_error_flag = True
-    sys.exit(1)
+    logger.info("Received termination signal (%s); shutting down gracefully.", signum)
+    sys.exit(0)
+
 
 atexit.register(on_service_exit)
 signal.signal(signal.SIGTERM, handle_signal)
